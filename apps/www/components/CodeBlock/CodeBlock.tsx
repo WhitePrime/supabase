@@ -1,127 +1,163 @@
-import { useCallback, useMemo } from 'react'
-import reactSyntaxHighlighter, { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
-import monokaiCustomTheme from 'data/CodeEditorTheme'
-import CodeBlockStyles from './CodeBlock.module.css'
-import { Button, IconCopy } from '@supabase/ui'
+import { Check, Copy, File, Terminal } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import CopyToClipboard from 'react-copy-to-clipboard'
-import rangeParser from 'parse-numeric-range'
-
-import classNames from 'classnames'
-
+import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
+import bash from 'react-syntax-highlighter/dist/cjs/languages/hljs/bash'
 import js from 'react-syntax-highlighter/dist/cjs/languages/hljs/javascript'
-import ts from 'react-syntax-highlighter/dist/cjs/languages/hljs/typescript'
+import kotlin from 'react-syntax-highlighter/dist/cjs/languages/hljs/kotlin'
 import py from 'react-syntax-highlighter/dist/cjs/languages/hljs/python'
 import sql from 'react-syntax-highlighter/dist/cjs/languages/hljs/sql'
+import yaml from 'react-syntax-highlighter/dist/cjs/languages/hljs/yaml'
+import { Button, cn } from 'ui'
+import monokaiCustomTheme from './CodeBlock.utils'
 
+export type LANG = 'js' | 'sql' | 'py' | 'bash' | 'ts' | 'tsx' | 'kotlin' | 'yaml'
 export interface CodeBlockProps {
-  lang: 'js' | 'ts' | 'sql' | 'py'
+  lang: LANG
   startingLineNumber?: number
   hideCopy?: boolean
+  showLineNumbers?: boolean
   className?: string
   children?: string
   size?: 'small' | 'medium' | 'large'
-  /**
-   * Inline styling
-   * Supports CSS Properties in camelcase
-   */
-  style?: React.CSSProperties | undefined
-  /**
-   * Lines to be highlighted.
-   * Supports individual lines: '14', multiple lines: '14,15', or a range of lines '14..19'
-   */
-  highlightLines?: string
-  hideBorder?: boolean
+  background?: string
 }
 
 function CodeBlock(props: CodeBlockProps) {
+  const { resolvedTheme } = useTheme()
+  const isDarkTheme = resolvedTheme?.includes('dark')!
+  const [copied, setCopied] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  const firstLine = props.children ? props.children.split('\n')[0] : ''
+
+  let filename = ''
+
+  if (firstLine.includes('filename =')) {
+    filename = firstLine.split('=')[1]
+  }
+
+  const content =
+    props.children && filename ? props.children.replace(`${firstLine}\n\n`, '') : props.children
+
+  const handleCopy = () => {
+    setCopied(true)
+    setTimeout(() => {
+      setCopied(false)
+    }, 1000)
+  }
+
   let lang = props.lang
     ? props.lang
     : props.className
-    ? props.className.replace('language-', '')
-    : 'js'
+      ? props.className.replace('language-', '')
+      : 'js'
   // force jsx to be js highlighted
   if (lang === 'jsx') lang = 'js'
-  if (lang === 'tsx') lang = 'ts'
 
   SyntaxHighlighter.registerLanguage('js', js)
-  SyntaxHighlighter.registerLanguage('ts', ts)
   SyntaxHighlighter.registerLanguage('py', py)
   SyntaxHighlighter.registerLanguage('sql', sql)
+  SyntaxHighlighter.registerLanguage('bash', bash)
+  SyntaxHighlighter.registerLanguage('kotlin', kotlin)
+  SyntaxHighlighter.registerLanguage('yaml', yaml)
 
   // const large = props.size === 'large' ? true : false
   const large = false
 
-  const shouldHighlightLines = props.highlightLines !== undefined
-  const highlightLines = useMemo(
-    () => new Set(rangeParser(props.highlightLines ?? '')),
-    [props.highlightLines]
-  )
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
-  const lineProps = useCallback(
-    (lineNumber: number) => {
-      const shouldHighlightLine = !shouldHighlightLines || highlightLines.has(lineNumber)
-
-      const style = shouldHighlightLine ? {} : { filter: 'grayscale(75%)', opacity: 0.5 }
-
-      return {
-        class: classNames(
-          CodeBlockStyles['code-line'],
-          shouldHighlightLines && shouldHighlightLine && CodeBlockStyles['code-line--flash']
-        ),
-        style,
-      }
-    },
-    [highlightLines]
-  )
+  if (!mounted) return null
 
   return (
-    <div className="relative">
-      <SyntaxHighlighter
-        language={lang}
-        style={monokaiCustomTheme}
-        className={[
-          CodeBlockStyles['code-block'],
-          '!bg-scale-1200 dark:!bg-scale-100',
-          props.hideBorder ? '' : 'border-scale-1100 dark:border-scale-400 rounded-lg border',
-        ].join(' ')}
-        customStyle={{
-          padding: 0,
-          fontSize: large ? 18 : 12,
-          lineHeight: large ? 1.2 : 1.2,
+    <div className="not-prose dark overflow-hidden">
+      {filename && (
+        <div
+          className="
+            bg-background
+            text-muted
+            flex
+            h-8 w-full
+            items-center
 
-          ...props.style,
-        }}
-        showLineNumbers={lang === 'cli' ? false : true}
-        lineNumberContainerStyle={{
-          paddingTop: '128px',
-        }}
-        lineNumberStyle={{
-          display: 'inline-flex',
-          justifyContent: 'flex-end',
-          minWidth: '48px',
-          // background: 'var(--colors-fixed-scale12)',
-          paddingLeft: '21px',
-          marginRight: '12px',
-          color: 'var(--colors-fixed-scale7)',
-          fontSize: large ? 14 : 12,
-          paddingTop: '4px',
-          paddingBottom: '4px',
-        }}
-        wrapLines={true}
-        lineProps={lineProps}
-      >
-        {props.children}
-      </SyntaxHighlighter>
+            gap-1
+            rounded-tr
+            rounded-tl
 
-      {!props.hideCopy && props.children ? (
-        <div className="dark absolute right-2 top-2">
-          <CopyToClipboard text={props.children}>
-            <Button type="default" icon={<IconCopy />}>
-              Copy
-            </Button>
-          </CopyToClipboard>
+            border-t
+
+            border-r
+            border-l
+            px-4
+            font-sans
+            "
+        >
+          {lang === 'bash' ? (
+            <Terminal size={12} strokeWidth={2} />
+          ) : (
+            <File size={12} strokeWidth={2} />
+          )}
+          <span className="text-xs">{filename ?? 'index.js'}</span>
         </div>
-      ) : null}
+      )}
+      <div className="relative">
+        {/* @ts-ignore */}
+        <SyntaxHighlighter
+          language={lang}
+          style={isDarkTheme ? monokaiCustomTheme.dark : monokaiCustomTheme.light}
+          className={cn(
+            'synthax-highlighter border border-default/15 rounded-lg',
+            !filename && 'rounded-t-lg',
+            'rounded-b-lg',
+            props.className
+          )}
+          customStyle={{
+            padding: props.showLineNumbers
+              ? large
+                ? '1.25rem 1rem'
+                : '1rem 0.8rem'
+              : large
+                ? '1.25rem 1.5rem'
+                : '1.25rem 1.5rem',
+            fontSize: large ? 18 : '0.775rem',
+            lineHeight: large ? 1.6 : 1.4,
+          }}
+          showLineNumbers={props.showLineNumbers}
+          lineNumberStyle={{
+            padding: '0px',
+            marginRight: '21px',
+            minWidth: '1.5em',
+            opacity: '0.3',
+            fontSize: large ? 14 : '0.75rem',
+          }}
+        >
+          {content}
+        </SyntaxHighlighter>
+        {!props.hideCopy && props.children ? (
+          <div className="absolute right-2 top-2">
+            <CopyToClipboard text={props.children}>
+              <Button
+                type="text"
+                icon={
+                  copied ? (
+                    <span className="text-brand">
+                      <Check strokeWidth={3} />
+                    </span>
+                  ) : (
+                    <Copy />
+                  )
+                }
+                onClick={() => handleCopy()}
+                aria-label="Copy"
+                className="px-1.5 py-1.5 border border-transparent hover:border-strong"
+              />
+            </CopyToClipboard>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
